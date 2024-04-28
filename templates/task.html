@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>TaMPESt</title>
+    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+	<link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <!-- <style type="text/css">
+        #task_network {
+            width: 800px;
+            height: 400px;
+            border: 1px solid lightgray;
+            margin-bottom: 10px;
+        }
+    </style> -->
+
+</head>
+<body>
+	<div>
+		<h1>任务管理规划简化系统</h1>
+		<a id = "back" href="/"> 返回 </a>
+	</div>
+	
+
+	<div>
+		<select id="json-file-select">
+			{% for file in json_files %}
+			<option value="{{ file }}">{{ file }}</option>
+			{% endfor %}
+		</select>
+		<button id="refresh-btn">Refresh</button>
+		<button id="load-btn">Load Chart</button>
+		<button id="del-btn">Delete</button>
+	</div>
+
+    <div id="task_network"></div>
+    <button onclick="UpdateNodeAndEdge()">更新节点和边</button>
+    <!-- <button onclick="removeSelectedNode()">删除选中的节点</button> -->
+    <div>
+		<table id="nodeTable">
+			<tr>
+				<td>节点ID:</td>
+				<td><input type="number" id="nodeId" readonly="true"></td>
+			</tr>
+			<tr>
+				<td>标签:</td>
+				<td><input type="text" id="nodeLabel" value=""></td>
+			</tr>
+			<tr>
+				<td>前置:</td>
+				<td><input type="text" id="nodePredecessor" value="" placeholder="前置节点ID，以逗号（,）分割多个ID"></td>
+			</tr>
+		</table>
+	</div>
+
+
+
+
+	<div>
+		<button onclick ="addRow()">Row+</button>
+		<form id="task_form" >
+			<input id = 'plan_name' name = "plan_name" type="text" placeholder="项目名"/>
+			<label> 开始时间 <input id = 'start_date' name = "start_date" type="date"/></label>
+			<table id ='table'>
+				<tr id = "head" class = "head">
+					<th name="task_id" class = "header">任务编号</th>
+					<th name="task_name" class = "header">任务名称</th>
+					<th name="start_date" class = "header">开始日期</th>
+					<th name="finish_date" class = "header">结束日期</th>
+					<th name="required_time" class = "header">预计时间</th>
+					<th class = "header"></th>
+				</tr>
+			</table>
+			<button type="submit">submit</button>
+		</form>
+		<button onclick="clearTable()">reset</button>
+		<div id="longest-path"><h3 id = "path"></h3></div>
+		<div id="plotly-canvas"></div>
+	</div>
+    
+    <script type="text/javascript">
+		var options = {
+			physics: {
+				enabled: true,
+				barnesHut: {
+					gravitationalConstant: -2000,
+					centralGravity: 0.3,
+					springLength: 95,
+					springConstant: 0.04,
+					damping: 0.09,
+					avoidOverlap: 0.1
+				},
+				solver: 'barnesHut'
+			}
+		};
+
+        var nodes = new vis.DataSet([]);
+        var edges = new vis.DataSet([]);
+        var container = document.getElementById('task_network');
+        var data = { nodes: nodes, edges: edges };
+        var options = {};
+        var network = new vis.Network(container, data, options);
+    
+        network.on("click", function (params) {
+            if (params.nodes.length > 0) {
+                var nodeId = params.nodes[0];
+                var nodeData = nodes.get(nodeId);
+                document.getElementById('nodeId').value = nodeData.id;
+                document.getElementById('nodeLabel').value = nodeData.label;
+				pred = ''
+				edges.get().filter(edge => edge.to == nodeId).forEach(function (edge){
+					pred += edge.from + ', '
+				})
+                document.getElementById('nodePredecessor').value = pred;
+            }
+        });
+
+		function UpdateNodeAndEdge() {
+            var id = document.getElementById('nodeId').value;
+            var label = document.getElementById('nodeLabel').value;
+            var predecessors = document.getElementById('nodePredecessor').value.split(',');
+			id = parseInt(id);
+            if (nodes.get(id)) {
+                nodes.update({id: id, label: label});
+            } else {
+                console.error("no such node");
+            }
+
+			var inedge = edges.get().filter(item=>item.to == id);
+
+			inedge.forEach(function(edge){
+				edges.remove(edge.id);
+			});
+    
+            predecessors.forEach(function(predecessor) {
+                predecessor = parseInt(predecessor.trim());
+                if (predecessor && nodes.get(predecessor)) {
+					var edgeId = `${predecessor}-to-${id}`;
+					edges.add({id: edgeId, from: predecessor, to: id, arrows: 'to'});
+                    // var edgeId = `${predecessor}-to-${id}`;
+                    // if (edges.get(edgeId)) {
+                    //     edges.update({id: edgeId, from: predecessor, to: id});
+                    // } else {
+                    //     edges.add({id: edgeId, from: predecessor, to: id, arrows: 'to'});
+                    // }
+                }
+            });
+        }
+
+
+    
+        function removeSelectedNode() {
+            var selectedNodes = network.getSelectedNodes();
+            nodes.remove(selectedNodes);
+            selectedNodes.forEach(function(nodeId) {
+                edges.forEach(function(edge) {
+                    if (edge.from === nodeId || edge.to === nodeId) {
+                        edges.remove(edge.id);
+                    }
+                });
+            });
+        }
+
+
+        function clearTable() {
+			var table = document.getElementById('table');
+			var tableName = document.getElementById('plan_name');
+			tableName.value=null;
+			var planStart = document.getElementById('start_date');
+			planStart.value=null;
+			var lp = document.getElementById('path');
+			lp.textContent=null;
+			var rows = table.rows.length;
+			for (var i = rows - 1; i > 0; i--) {
+				table.deleteRow(i);
+			}
+			var canvas = document.getElementById('plotly-canvas');
+			while (canvas.firstChild)
+			{
+				canvas.removeChild(canvas.firstChild);
+			};
+			edges.clear();
+			nodes.clear();
+		}
+
+		document.getElementById('del-btn').addEventListener('click', function() {
+			var selectedFile = document.getElementById('json-file-select').value;
+			if (confirm(`确定要删除 ${selectedFile} 吗？这个操作不能撤销。`)) {
+				clearTable();
+				fetch('/project/del-plan/'+ selectedFile, {
+					method: 'DELETE' 
+				})
+				.then(response => response.json())
+				.then(files => {
+					var select = document.getElementById('json-file-select');
+					select.innerHTML = '';
+					files.forEach(function(file) {
+						var option = new Option(file, file);
+						select.add(option);
+					});
+				});
+			}
+		});
+		
+		document.getElementById('load-btn').addEventListener('click', function() {
+			var selectedFile = document.getElementById('json-file-select').value;
+			clearTable();
+			fetch('/task/get-everything/' + selectedFile)
+				.then(response => response.json())
+				.then(jsonChunk =>{
+					data = jsonChunk.data;
+					gantt = jsonChunk.gantt;
+					mat = jsonChunk.mat;
+					path = jsonChunk.path;
+
+					document.getElementById('start_date').value = data.start_date;
+					document.getElementById('plan_name').value = data.plan_name;
+					// console.log(data.form);
+					data.form.forEach(task => {
+						addRow(task);
+					});
+
+					Plotly.newPlot('plotly-canvas', gantt.data, gantt.layout);
+
+					for(var entry of mat){
+						var seg = entry.split(',');
+						var edgeId = `${parseInt(seg[0])+1}-to-${parseInt(seg[1])+1}`;
+						edges.add({id: edgeId, from: parseInt(seg[0])+1, to: parseInt(seg[1])+1, arrows: 'to'});
+					}
+
+					document.getElementById("path").textContent = path
+				});
+
+			// fetch('/task/get-json/' + selectedFile)
+			// 	.then(response => response.json())
+			// 	.then(data => {
+			// 		Plotly.newPlot('plotly-canvas', data.data, data.layout);
+			// 	});
+			// fetch('/task/get-matx/' + selectedFile)
+			// 	.then(response => response.json())
+			// 	.then(data => {
+			// 		console.log(data);
+			// 		for(var entry of data){
+			// 			var seg = entry.split(',');
+			// 			var edgeId = `${parseInt(seg[0])+1}-to-${parseInt(seg[1])+1}`;
+			// 			edges.add({id: edgeId, from: parseInt(seg[0])+1, to: parseInt(seg[1])+1, arrows: 'to'});
+			// 		}
+			// 	});
+			});
+		
+		document.getElementById('refresh-btn').addEventListener('click', function() {
+			fetch('/task/refresh-json-files')
+				.then(response => response.json())
+				.then(files => {
+					var select = document.getElementById('json-file-select');
+					select.innerHTML = '';
+					files.forEach(function(file) {
+						var option = new Option(file, file);
+						select.add(option);
+					});
+				});
+		});
+
+
+		document.getElementById('task_form').addEventListener('submit', function(event) {
+			event.preventDefault();
+			var formData = new FormData(this);
+			var objData = {};
+            
+            for (var entry of formData.entries()){
+                objData[entry[0]] = entry[1];
+            }
+
+			for (var from of nodes.get()){
+				for (var to of nodes.get()){
+					
+					if (from.id != to.id){
+						var edgeId = `${from.id}-to-${to.id}`;
+						if (edges.get(edgeId)){
+							objData[`(${from.id-1},${to.id-1})|mat`]=1;
+						}
+						else {
+							objData[`(${from.id-1},${to.id-1})|mat`]=0;
+						}
+					}
+				}
+			}
+			console.log(objData)
+			fetch('/task/generate', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify(objData),
+			})
+			.then(response => response.json())
+			.then(chunk => {
+				graph = chunk.gantt,
+				path = chunk.path,
+				dataForm = chunk.data;
+				Plotly.newPlot('plotly-canvas', graph.data, graph.layout);
+
+				document.getElementById("path").textContent = path
+				var table = document.getElementById('table');
+				for (var i = rows - 1; i > 0; i--) {
+					table.deleteRow(i);
+				}
+				dataForm.form.forEach(task => {
+						addRow(task);
+					});
+
+			})
+			.catch(error => {
+				console.error('Error:', error);
+			});
+		});
+		function addRow() {
+			var task;
+			// console.log(arguments.length);
+			if (arguments.length == 1) {
+				// console.log("yes");
+				task = arguments[0];
+			}
+			var table = document.getElementById('table');
+			var row = document.createElement('tr');
+			row.className = "row";
+			let count = document.getElementsByClassName('row').length;
+			row.name = "row" + count;
+
+			let TId = createCellWithText(count + 1, "id", row.name);
+			let TNa = createInputCell(task ? task.name : "", "name", row.name, "text", "task" + (count + 1));
+			let TSd = createInputCell(task ? task.start_date : "", "start_date", row.name, "date");
+			let TFd = createInputCell(task ? task.finish_date : "", "finish_date", row.name, "date");
+			let TRt = createInputCell(task ? task.required_time : "", "required_time", row.name, "number");
+			let TDe = createDeleteButtonCell(row);
+
+			TSd.getElementsByTagName('input')[0].readOnly = true;
+			TFd.getElementsByTagName('input')[0].readOnly = true;
+			if (task) {
+				if (task.status >= 1){
+					TNa.getElementsByTagName('input')[0].readOnly = true;
+				}
+				if (task.status == 2){
+					TRt.getElementsByTagName('input')[0].readOnly = true;
+				}
+				
+				
+			}
+
+			[TId, TNa, TSd, TFd, TRt, TDe].forEach(cell => row.appendChild(cell));
+			table.appendChild(row);
+
+
+			tag = TNa.getElementsByTagName('input')[0].value;
+			if (tag == ''){
+				tag = 'task' + (count + 1)
+			}
+			nodes.add({id: parseInt(TId.getElementsByTagName('p')[0].textContent), label: tag});
+
+		}
+
+
+		function createDeleteButtonCell(row) {
+            var cell = document.createElement('td');
+            var btn = document.createElement('button');
+            btn.textContent = '删除';
+            btn.onclick = function () {
+                var table = document.getElementById('table');
+    			table.removeChild(row);
+				var id = row.children[0].getElementsByTagName('p')[0].textContent;
+				deleteNodeAndReorder(id);
+				updateNumber();
+            };
+            cell.appendChild(btn);
+            return cell;
+        }
+
+        function updateNumber(){
+            var rows = document.getElementsByClassName('row');
+				for (var i = 0; i < rows.length; i++) {
+					var row = rows[i];
+					rowName = "row" + i;
+					var idCell = row.children[0].getElementsByTagName('p')[0];
+					idCell.textContent = i + 1;
+                    var nameField = row.children[1].getElementsByTagName('input')[0];
+                    nameField.name = "name|"+rowName;
+                    nameField.placeholder = "task" + (i+1);
+                    var startField = row.children[2].getElementsByTagName('input')[0];
+                    startField.name = "start_date|"+rowName;
+                    var finishField = row.children[3].getElementsByTagName('input')[0];
+                    finishField.name = "finish_date|"+rowName;
+                    var reqField = row.children[4].getElementsByTagName('input')[0];
+                    reqField.name = "required_time|"+rowName;
+				}
+        }
+
+		function deleteNodeAndReorder(nodeId) {
+			nodeId = parseInt(nodeId);
+
+			
+			var allNodes = nodes.get();
+			var allEdges = edges.get();
+
+			// nodes.remove({id: nodeId});
+			// console.log(nodes.get());
+			allNodes.forEach(function(node) {
+				console.log(nodes.get());
+				console.log(edges.get());
+				if (node.id > nodeId) {
+					nodes.remove({id: node.id});
+					var edgesToUpdate = allEdges.filter(edge => edge.from === node.id || edge.to === node.id);
+
+					edgesToUpdate.forEach(function(edge) {
+						var newFrom = edge.from;
+						var newTo = edge.to;
+						edges.remove({id: edge.id});
+						if (edge.from >= nodeId) {
+							newFrom = edge.from - 1;
+						}
+						if (edge.to >= nodeId) {
+							newTo = edge.to - 1;
+						}
+						var edgeId = `${newFrom}-to-${newTo}`;
+						edges.update({id: edgeId, from: newFrom, to: newTo, arrows: 'to'});
+					});
+
+					var newId = node.id - 1;
+					nodes.add({id:newId, label:node.label});
+				}
+				else if (node.id === nodeId){
+					nodes.remove({id: nodeId});
+					var edgesToRemove = allEdges.filter(edge => edge.from === node.id || edge.to === node.id);
+					edgesToRemove.forEach(function(edge) {
+						edges.remove({id: edge.id});
+					});
+				}
+			});
+
+		}
+
+
+
+		function createCellWithText(text, className, rowName) {
+			let cell = document.createElement('td');
+			let content = document.createElement('p');
+			content.className = className;
+			content.name = className + "|" + rowName;
+			content.appendChild(document.createTextNode(text));
+			cell.appendChild(content);
+			return cell;
+		}
+
+		function createInputCell(value, name, rowName, type, placeholder = "") {
+			let cell = document.createElement('td');
+			let input = document.createElement('input');
+			input.type = type;
+			input.value = value;
+			input.name = name + "|" + rowName;
+			input.placeholder = placeholder;
+			cell.appendChild(input);
+			return cell;
+		}
+
+
+    </script>
+</body>
+</html>

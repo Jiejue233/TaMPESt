@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+    <head>
+		<meta charset="utf-8">
+        <title>TaMPESt</title>
+		<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+		<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+		<link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
+
+    </head>
+	<body>
+        <h1>任务管理规划简化系统</h1>
+
+		<div id = "page-selection">
+			<a id = "project" href="/project/" class="image-link">
+				<div class="image-overlay">
+				  <img src="{{ url_for('static', filename='project.png') }}" alt="project preview">
+				  <div class="overlay-text">计划排程</div>
+				</div>
+			</a>
+			<a id = "task" href="/task/" class="image-link">
+			<div class="image-overlay">
+				<img src="{{ url_for('static', filename='task.png') }}" alt="task preview">
+				<div class="overlay-text">项目任务安排</div>
+			</div>
+			</a>
+		</div>
+		</body>
+</html>

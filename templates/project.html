@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+    <head>
+		<meta charset="utf-8">
+        <title>TaMPESt</title>
+		<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+		<link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
+
+		<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    </head>
+	<body>
+		<div>
+			<h1>任务管理规划简化系统</h1>
+			<a id = "back" href="/"> 返回 </a>
+		</div>
+		<div>
+			<select id="json-file-select">
+				{% for file in json_files %}
+				<option value="{{ file }}">{{ file }}</option>
+				{% endfor %}
+			</select>
+			<button id="refresh-btn">Refresh</button>
+			<button id="load-btn">Load Chart</button>
+			<button id="del-btn">Delete</button>
+		</div>
+	
+		<div>
+			<button onclick ="addRow()">Row+</button>
+			<form id="task_form" >
+				<input id = 'plan_name' name = "plan_name" type="text" placeholder="计划名"/>
+				<label> 开始时间 <input id = 'start_date' name = "start_date" type="date"/></label>
+				<table id ='table'>
+					<tr id = "head" class = "head">
+						<th name="task_id" class = "header">
+							任务编号
+						</th>
+						<th name="task_name" class = "header">
+							任务名称
+						</th>
+						<th name="priority" class = "header">
+							重要等级
+						</th>
+						<th name="due_date" class = "header">
+							结束日期
+						</th>
+						<th name="required_time" class = "header">
+							预计时间
+						</th>
+						<th class = "header">		
+						</th>
+					</tr>
+					
+				</table>
+				<button type="submit">submit</button>
+			</form>
+			<button onclick="clearTable()">reset</button>
+			<div id="plotly-canvas"></div>
+		</div>
+		<script>
+		function clearTable() {
+			var table = document.getElementById('table');
+			var tableName = document.getElementById('plan_name');
+			tableName.value=null
+			var planStart = document.getElementById('start_date');
+			planStart.value=null
+			var rows = table.rows.length;
+			for (var i = rows - 1; i > 0; i--) {
+				table.deleteRow(i);
+			}
+			var canvas = document.getElementById('plotly-canvas');
+			while (canvas.firstChild)
+			{
+				canvas.removeChild(canvas.firstChild);
+			};
+		}
+
+		document.getElementById('del-btn').addEventListener('click', function() {
+			var selectedFile = document.getElementById('json-file-select').value;
+			if (confirm(`确定要删除 ${selectedFile} 吗？这个操作不能撤销。`)) {
+				clearTable();
+				fetch('/project/del-plan/'+ selectedFile, {
+					method: 'DELETE' 
+				})
+				.then(response => response.json())
+				.then(files => {
+					var select = document.getElementById('json-file-select');
+					select.innerHTML = '';
+					files.forEach(function(file) {
+						var option = new Option(file, file);
+						select.add(option);
+					});
+				});
+			}
+		});
+		
+		document.getElementById('load-btn').addEventListener('click', function() {
+			var selectedFile = document.getElementById('json-file-select').value;
+			clearTable();
+			fetch('/project/get-data/' + selectedFile)
+				.then(response => response.json())
+				.then(data =>{
+					document.getElementById('start_date').value = data.start_date;
+					document.getElementById('plan_name').value = data.plan_name;
+					console.log(data.form);
+					data.form.forEach(task => {
+						addRow(task);
+					});
+				});
+
+			fetch('/project/get-json/' + selectedFile)
+				.then(response => response.json())
+				.then(data => {
+					Plotly.newPlot('plotly-canvas', data.data, data.layout);
+				});
+		});
+		
+		document.getElementById('refresh-btn').addEventListener('click', function() {
+			fetch('/project/refresh-json-files')
+				.then(response => response.json())
+				.then(files => {
+					var select = document.getElementById('json-file-select');
+					select.innerHTML = '';
+					files.forEach(function(file) {
+						var option = new Option(file, file);
+						select.add(option);
+					});
+				});
+		});
+
+
+		document.getElementById('task_form').addEventListener('submit', function(event) {
+			event.preventDefault();
+			var formData = new FormData(this);
+			var objData = {};
+            
+            for (var entry of formData.entries()){
+                objData[entry[0]] = entry[1];
+            }
+			fetch('/project/generate', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify(objData),
+			})
+			.then(response => response.json())
+			.then(data => {
+				Plotly.newPlot('plotly-canvas', data.data, data.layout);
+			})
+			.catch(error => {
+				console.error('Error:', error);
+			});
+		});
+		function addRow() {
+			var task;
+			console.log(arguments.length);
+			if (arguments.length == 1) {
+				console.log("yes");
+				task = arguments[0];
+			}
+			var table = document.getElementById('table');
+			var row = document.createElement('tr');
+			row.className = "row";
+			let count = document.getElementsByClassName('row').length;
+			row.name = "row" + count;
+
+			let TId = createCellWithText(count + 1, "id", row.name);
+			let TNa = createInputCell(task ? task.name : "", "name", row.name, "text", "task" + (count + 1));
+			let TPr = createInputCell(task ? task.priority : "", "priority", row.name, "number");
+			let TDd = createInputCell(task ? task.due_date : "", "due_date", row.name, "date");
+			let TRt = createInputCell(task ? task.required_time : "", "required_time", row.name, "number");
+			let TDe = createDeleteButtonCell(row);
+
+			if (task && task.status > 0) {
+				TPr.getElementsByTagName('input')[0].readOnly = true;
+				if (task.status == 2) {
+					TDd.getElementsByTagName('input')[0].readOnly = true;
+					TRt.getElementsByTagName('input')[0].readOnly = true;
+				}
+			}
+
+			[TId, TNa, TPr, TDd, TRt, TDe].forEach(cell => row.appendChild(cell));
+			table.appendChild(row);
+		}
+
+		function createDeleteButtonCell(row) {
+            var cell = document.createElement('td');
+            var btn = document.createElement('button');
+            btn.textContent = '删除';
+            btn.onclick = function () {
+                var table = document.getElementById('table');
+    			table.removeChild(row);
+				updateNumber();
+            };
+            cell.appendChild(btn);
+            return cell;
+        }
+
+        function updateNumber(){
+            var rows = document.getElementsByClassName('row');
+				for (var i = 0; i < rows.length; i++) {
+					var row = rows[i];
+					rowName = "row" + i;
+					var idCell = row.children[0].getElementsByTagName('p')[0];
+					idCell.textContent = i + 1;
+                    var nameField = row.children[1].getElementsByTagName('input')[0];
+                    nameField.name = "name|"+rowName;
+                    nameField.placeholder = "task" + (i+1);
+                    var priorityField = row.children[2].getElementsByTagName('input')[0];
+                    priorityField.name = "priority|"+rowName;
+                    var dueField = row.children[3].getElementsByTagName('input')[0];
+                    dueField.name = "due_date|"+rowName;
+                    var reqField = row.children[4].getElementsByTagName('input')[0];
+                    reqField.name = "required_time|"+rowName;
+				}
+        }
+
+		function createCellWithText(text, className, rowName) {
+			let cell = document.createElement('td');
+			let content = document.createElement('p');
+			content.className = className;
+			content.name = className + "|" + rowName;
+			content.appendChild(document.createTextNode(text));
+			cell.appendChild(content);
+			return cell;
+		}
+
+		function createInputCell(value, name, rowName, type, placeholder = "") {
+			let cell = document.createElement('td');
+			let input = document.createElement('input');
+			input.type = type;
+			input.value = value;
+			input.name = name + "|" + rowName;
+			input.placeholder = placeholder;
+			cell.appendChild(input);
+			return cell;
+		}
+
+		</script>
+		</body>
+</html>

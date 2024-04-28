@@ -2,9 +2,13 @@ import numpy as np
 import datetime
 
 class Task():
-    def __init__(self, task_prior: int, due_date: datetime.date,
-                 required_time=datetime.timedelta()):
-        self.required_time = required_time
+    def __init__(self,name, task_prior: int, due_date: datetime.date,
+                 required_time: datetime.timedelta | int):
+        self.name = name
+        if type(required_time) is int:
+            self.required_time = datetime.timedelta(days=int(required_time))
+        else:
+            self.required_time = required_time
         self.priority = task_prior
         self.accepted_date = datetime.date.today()
         self.start_date = datetime.date.today()
