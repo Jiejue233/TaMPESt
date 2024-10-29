@@ -4,7 +4,7 @@ import sys
 import numpy as np
 from deprecated import deprecated
 import Data.Synthesiser as syn
-import GenaticPlanning as gp
+# import GenaticPlanning as gp
 import plotly.figure_factory as ff
 import datetime
 import pickle
@@ -69,21 +69,21 @@ def fetch_adjacency_matrix(name, edge_list, size):
     return adjacency_matrix
 
 
-def generate_plan(data: list[Task.Task], adjacency_matrix: np.ndarray = None):
-    planning = gp.Incubator(len(data))
-    if adjacency_matrix is not None:
-        evaluator = gp.TaskEvaluator(data, adjacency_matrix)
-        planning.evolution_mode("task", (evaluator.customCrossover, evaluator.customMutation))
-        planning.set_evolution_goal(evaluator.reliance_evaluate)
-    else:
-        evaluator = gp.TaskEvaluator(data)
-        planning.evolution_mode("project")
-        planning.set_evolution_goal(evaluator.simple_evaluate)
-    result = planning.evolve()
-    # print(result)
-    # print(evaluator.simple_evaluate(result))
-
-    return result
+# def generate_plan(data: list[Task.Task], adjacency_matrix: np.ndarray = None):
+#     planning = gp.Incubator(len(data))
+#     if adjacency_matrix is not None:
+#         evaluator = gp.TaskEvaluator(data, adjacency_matrix)
+#         planning.evolution_mode("task", (evaluator.customCrossover, evaluator.customMutation))
+#         planning.set_evolution_goal(evaluator.reliance_evaluate)
+#     else:
+#         evaluator = gp.TaskEvaluator(data)
+#         planning.evolution_mode("project")
+#         planning.set_evolution_goal(evaluator.simple_evaluate)
+#     result = planning.evolve()
+#     # print(result)
+#     # print(evaluator.simple_evaluate(result))
+#
+#     return result
 
 
 def plan_task(start_date, data: list[Task.Task], order:list[int], adjacency_matrix = None):
@@ -455,25 +455,10 @@ def generate(target):
             trimmed_matx = np.delete(ajce_matx, reordered_seq, axis=0)
             trimmed_matx = np.delete(trimmed_matx, reordered_seq, axis=1)
 
-        result = generate_plan(unplanned, trimmed_matx)
 
         unplan_list = np.delete(np.arange(len(task_list)), reordered_seq).tolist()
-        for i in result:
-            reordered_seq.append(unplan_list[i])
-        order_list.update({name: reordered_seq})
-        graph_data = plan_task(start_date, task_list, reordered_seq, ajce_matx)
-        gen_gantt(target, name, graph_data, reordered_seq)
-    else:
-        temp = table_content['start_date'].split("-")
-        start_date = datetime.date(year=int(temp[0]), month=int(temp[1]), day=int(temp[2]))
-        task_list = fetch_data(data_dict, start_date)
-        ajce_matx = None
-        if len(edge_list) != 0:
-            ajce_matx = fetch_adjacency_matrix(name, edge_list, len(task_list))
-        result = generate_plan(task_list, ajce_matx)
-        order_list.update({name: result})
-        graph_data = plan_task(start_date, task_list, result, ajce_matx)
-        gen_gantt(target, name, graph_data, result)
+
+
 
     with open('File/regis.json', 'w') as file:
         json.dump(order_list, file, indent=4)
